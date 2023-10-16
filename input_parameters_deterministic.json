@@ -1,0 +1,182 @@
+{
+  "CAPEX_inputs": {
+    "Purchased Equipment Cost": 1,
+    "Instrumentation and Controls Cost": ["uniform",0.08, 0.55],
+    "Piping Cost": ["uniform",0.1, 0.8],
+    "Electrical Cost": ["uniform",0.1, 0.4],
+    "Buildings Cost": ["uniform",0.1, 0.7],
+    "Service Facilities and Yard Improvements Cost": ["uniform",0.05, 0.18],
+    "Land Cost": 900000,
+    "Engineering and Supervision Cost": ["uniform",0.05, 0.3],
+    "Legal Expenses Cost": ["uniform",0.03, 0.05],
+    "Construction Expense and Contractors Fee Cost": ["uniform",0.3, 0.4],
+    "Contingency Cost": ["uniform",0.35, 0.45],
+    "Working Capital": ["uniform",0.1, 0.2],
+    "Battery Storage CAPEX 2023": ["correlated", 800, 1500],
+    "Wind turbine CAPEX 2023": ["correlated",1200, 1400],
+    "Battery Storage CAPEX 2030": ["correlated",450, 1200],
+    "Wind turbine CAPEX 2030": ["correlated",750, 1200],
+    "Stack cost 2023": ["uniform", 500, 1000],
+    "Stack cost 2030": ["uniform",500, 750],
+    "Stack and battery replacement": 1,
+    "AEC stack lifetime": ["uniform",82, 123],
+    "Battery lifetime": ["uniform", 13, 20],
+    "Wind farm lifetime": 20,
+    "wind capacity": 0.42,
+    "Battery roundtrip eff": 0.85
+  },
+  "basic_equipment_costs": {
+    "AP SMR": ["constant",726947344.6, 508096133.6],
+    "AP CCS": ["constant",1103130442, 781847023.7],
+    "AP BH2S": ["constant",940144529.3, 528806470],
+    "AP AEC": ["constant",567914373, 402707562.8]
+  },
+  "financial_inputs" : {
+    "availability": 0.9,
+    "inflation": 0.0246,
+    "Y": ["constant",0.1, 0.6, 0.3],
+    "return_on_equity": 0.1227,
+    "cost_of_debt": 0.055,
+    "equity": 0.6319,
+    "state_tax": 0.0525,
+    "federal_tax": 0.21,
+    "loan_lifetime": 180,
+    "equipment_lifetime_depreciation": 84,
+    "construction_time": 36,
+    "CAC discount": 0.02
+  },
+  "engineering_inputs": {
+    "NH3": 2717,
+    "H2": 483.013,
+    "Eff_electrolysis": ["uniform", 0.70, 0.78],
+    "H2 LHV": 33.3333,
+    "CCS capture rate": 0.956
+  },
+  "electricity_requirements": {
+    "AP SMR": ["constant", 13, 64],
+    "AP CCS": ["constant", 41, 117],
+    "AP BH2S": ["constant", 76.6, 127]
+  },
+  "natural_gas_requirements": {
+      "AP SMR": 25039232.02,
+      "AP CCS": 26624225.74,
+      "AP BH2S": 0,
+      "AP AEC": 0
+  },
+  "BFW_requirements": {
+      "AP SMR": 52709532285,
+      "AP CCS": 54034044285,
+      "AP BH2S": 53448253002,
+      "AP AEC": 73077302619,
+      "AP AEC osmosis": 1332790200
+  },
+  "HP_steam_requirements": {
+      "AP SMR": 0,
+      "AP CCS": 0,
+      "AP BH2S": 0,
+      "AP AEC": 0
+  },
+  "MI_OPEX_inputs" : {
+    "processing_steps": {
+        "AP SMR": 30,
+        "AP CCS": 33,
+        "AP BH2S": 38,
+        "AP AEC": 23
+    },
+    "hours_perday_perprocessingstep": 55,
+    "operator_pay": 39.75,
+
+    "heuristics_factors": {
+        "maintenance": 0.0286,
+        "supervision": 0.15,
+        "operating_supplies": 0.1,
+        "laboratory_charges": 0.15,
+        "patents_and_royalties": 0.005,
+        "overhead": 0.70
+    },
+
+    "fixed_charges": {
+        "Financing Costs": 0.00,
+        "Rent": 0.1,
+        "Insurance": 0.005,
+        "Local Property Taxes": 0.025,
+        "Administrative Costs": 0.2
+    },
+    "misc_raw_materials": {
+        "AP SMR": 6824075.699,
+        "AP CCS": 12434783.54,
+        "AP BH2S":  27093089.54,
+        "AP AEC": 335267.1
+    },
+    "start-up costs": {
+        "AP SMR": 15413897.74,
+        "AP CCS": 16514194.14,
+        "AP BH2S":  15532525.48,
+        "AP AEC": 118627.74
+    },
+    "BFW cost": 0.000285,
+    "AEC BFW cost reverse osmosis": 0.0059,
+    "HP steam cost": 0.00551,
+    "Battery OPEX": ["uniform", 6.16, 49.33],
+    "Wind OPEX": 52.22,
+    "distribution_and_marketing": 0.11,
+    "R&D costs": 0.035,
+    "Battery Var OPEX": ["uniform", 0, 8.63],
+    "CCS T&S Cost": ["uniform", 9.87, 27.13]
+  },
+  "Market_inputs" : {
+    "NG_initial_price": 7.753,
+    "NH3_initial_price": 1104,
+    "NG_drift": -0.0016,
+    "NG_std": 0,
+    "El_initial_price": 0.083,
+    "El_drift": ["constant", -0.0005, -0.0006],
+    "El_STD": 0,
+    "SPY_drift": 0.00354,
+    "SPY_std": 0.0
+    },
+  "carbon_intensity" : {
+    "NGCC thermal efficiency": 0.4610,
+    "stack": {
+        "AP SMR": 9.3,
+        "AP BH2S": 0,
+        "AP AEC": 0
+    },
+    "electricity": {
+        "oil": ["uniform", 0.256, 1.17],
+        "natural gas": ["uniform", 0.389, 0.988],
+        "coal": ["uniform", 1.001,1.01],
+        "nuclear": ["uniform", 0.012, 0.220],
+        "renewables": 0
+    },
+    "biomass": ["uniform", 0.02, 0.038],
+    "EU_emissions_reduction": 0.014,
+    "EU 2023 emissions base": 8.83
+  },
+  "IRA_credits": {
+      "45V": {
+          "3": ["constant",0, 0.45],
+          "1": ["constant",0.45, 1.5],
+          "0.75": ["constant",1.5, 2.5],
+          "0.6" : ["constant",2.5, 4]
+      },
+      "45V lifetime": 10,
+      "45Q": 85,
+      "45Q lifetime": 12,
+      "45Y": 1.5,
+      "45Y expiry": 324,
+      "48C": 0.0,
+      "48C expiry": 324,
+      "48E": ["uniform",0.3, 0.4],
+      "48E expiry": 324,
+      "TCvalue": {
+          "Year 1-5": 1,
+          "Year 6": ["uniform",0.6, 0.85],
+          "Year 7": ["uniform",0.7, 0.9],
+          "Year 8": ["uniform",0.75, 0.925],
+          "Year 9": ["uniform",0.8, 0.95],
+          "Year 10 and after": ["uniform",0.85, 0.95]
+      },
+      "EU_CO2_price": ["uniform",35, 100]
+  }
+}
