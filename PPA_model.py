@@ -2,7 +2,7 @@ import pandas as pd
 import ast
 from scipy.optimize import root_scalar
 import json
-from BASELINE_global_variables import *
+from global_variables import *
 from _instantiate_inputs import InstantiateInputs
 
 OPTIMIZATION_RESULTS_FILE_PATH = optimization_results_file_path

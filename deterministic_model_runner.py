@@ -1,115 +1,56 @@
 #!/usr/bin/env python
 # coding: utf-8
 import numpy as np
-import pandas as pd
-from numpy.random import uniform as uni
-from numpy.random import seed as seed
+
 import sys
-import ast
-from datetime import datetime
-import pytz
-from BASELINE_PPA_models import LCOE_dataset
 import json
-from BASELINE_global_variables import *
 from _instantiate_inputs import InstantiateInputs
 from _CAPEX import CAPEX
 from _GBM import brownian_motion
 from _MI_OPEX import MI_OPEX
 from _CI_Calculator import Carbon_Intensity_of_technology
-from _TAX_CREDITS import TaxCreditCalculator
 from _DCF_Model import Stochastic_DCF
+from _get_capacities_CI_and_PPA_data import *
 
 CBAM = False # False or True
 matching = 'monthly' #options: hourly, monthly, and yearly
 # NPV_dataset = run_simulation(100, NPV=True, isCBAM=CBAM)
-mult = 8 #Multiplies the number of simulations
-
-def dataframes_to_excel(dfs, file_name):
-    """
-    Convert multiple pandas DataFrames into one Excel file with multiple sheets.
-
-    Parameters:
-    dfs (dict): Dictionary where keys are sheet names and values are corresponding DataFrames
-    file_name (str): Name of the Excel file
-
-    Returns:
-    None
-    """
-    try:
-        with pd.ExcelWriter(file_name) as writer:
-            for sheet_name, df in dfs.items():
-                if isinstance(df, dict):  # check if value is another dict (specifically for 'CI')
-                    for sub_sheet_name, sub_df in df.items():
-                        # use a combination of main key and sub key as the sheet name
-                        sub_sheet_name = f"{sheet_name}_{sub_sheet_name}"
-                        sub_df.to_excel(writer, sheet_name=sub_sheet_name, index=False)
-                else:
-                    df.to_excel(writer, sheet_name=sheet_name, index=False)
-        print(f'Successfully written to {file_name}')
-    except Exception as e:
-        print(f'An error occurred: {e}')
-def get_current_est_time():
-    est_timezone = pytz.timezone('US/Eastern')
-
-    current_time_est = datetime.now(est_timezone)
-
-    return current_time_est.strftime('%Y-%m-%d %H:%M:%S')
-#TODO Check the replacement cost logic
-#TODO Check and automate the final_CAPEX and final_OPEX
-#TODO Update the Land cost to be 900,000 for AP and 4% installed cost for wind and battery
-#TODO Eliminate battery roundtrip efficiency because it is already taken into account in the optimization model
-#TODO Check the policy choice helper function works correctly
-#TODO Check the depreceation is implemented correctly
-#TODO Fix BFW water costs. Assume HP steam costs are 0 since the HP steam is generated on site.
-
-#Load the AEO22 and AEO23 data from the Excel file
-aeo22_data = pd.read_excel(
-    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO22',
-    index_col=0)
-aeo23_data = pd.read_excel(
-    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO23',
-    index_col=0)
-wind_and_battery_excel = pd.read_excel(optimization_results_file_path, sheet_name='Sheet1')
-
-
-PPA_data = LCOE_dataset
-
-#capacity for wind and battery value ranges
-def extract_values(time, matching, results_df=wind_and_battery_excel):
-    # Filter for given time and matching, and capex_description 'low'
-    mask_high = (results_df['time'] == time) & (results_df['matching'] == matching) & (
-                results_df['capex_description'] == 'high') & (results_df['location'] == 'high')
-    mask_low = (results_df['time'] == time) & (results_df['matching'] == matching) & (
-                results_df['capex_description'] == 'low') & (results_df['location'] == 'low')
-
-    # Extracting values for each technology
-    extracted_values = {}
-    for mask in [mask_high, mask_low]:
-        filtered_df = results_df[mask]
-        for _, row in filtered_df.iterrows():
-            technology = row['technology']
-            wind_capacity = row['wind_capacity']
-            battery_capacity = row['battery_capacity']
-            curtailment = ast.literal_eval(row['curtailment'])
-            discharge = ast.literal_eval(row['discharge'])
-            extracted_values[technology] = {
-                'wind_capacity': wind_capacity,
-                'battery_capacity': battery_capacity,
-                'curtailment': curtailment,
-                'discharge': discharge
-            }
-
-    return extracted_values
-wind_and_battery_data = {time:{matching:extract_values(time, matching) for matching in matching_type} for time in times}
-
-#Import average inputs from JSON file
-
-
-
+mult = 1 #Multiplies the number of simulations
 
 def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=False, NP_NPV=False, CAPEX_OPEX=False,
                    absolute_support=False, ROI=False, El_market=False, CAPEX_component=False, Sensitivity=False, isCBAM=False,
                    quality_assurance=False, matching='hourly', CAC_quality = False):
+
+    """
+    Args:
+        isCBAM: Boolean, determines if CBAM is considered. Applies CBAM to SMR too.
+        matching: String, options: 'hourly', 'monthly', or 'yearly', determines the type of electricity matching.
+        simulations: Integer, Number of simulations desired.
+
+        %%NOTE: The arguments below are mutually exclusive. When performing a run_simulation call,
+        %%  you can only set one of the arguments as true.
+            NPV: Boolean, determines if NPV is considered. MAIN PAPER METRIC.
+            CAC: Boolean, determines if CAC is considered. MAIN PAPER METRIC.
+            CI: Boolean, determines if CI is considered. MAIN PAPER METRIC.
+            Potential_TC: Boolean, determines if Potential and CAPEX are considered. MAIN PAPER METRIC.
+            absolute_support: Boolean, determines if absolute support is considered. MAIN PAPER METRIC.
+            NP_NPV: Boolean, determines if NP_NPV is considered.NP_NPV is the NPV without IRA credits.
+            CAPEX_OPEX: Boolean, determines if CAPEX and OPEX are considered. Deprecated. Ignore.
+            ROI: Boolean, determines if ROI is considered. Deprecated. Ignore.
+            El_market: Boolean, determines if El_market is considered.
+            CAPEX_component: Boolean, determines if CAPEX component is considered.
+            Sensitivity:  Boolean, determines if Sensitivity is considered. Deprecated. Ignore.
+            quality_assurance: Boolean, determines if quality assurance is considered. Only for QA purposes.
+            CAC_quality: Boolean, determines if CAC quality is considered. Only for QA purposes.
+
+    Returns: A pandas dataframe containing the simulation results for various business model scenarios (see global variable)
+    """
+
+    """
+    Below is a set of empty dataframes corresponding to the metrics of interest. These dataframes label the dataframe columns
+    so that plotting becomes easier. 
+    """
+
     NPV_data = pd.DataFrame(
         columns=['time', 'scenario', 'simulation', 'AP_SMR_NPV', 'AP_CCS_NPV', 'AP_BH2S_NPV', 'AP_AEC_NPV'])
     NP_NPV_data = pd.DataFrame(
@@ -133,7 +74,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
 
     Potential_and_AP_CE_TC = pd.DataFrame(
         columns=['time', 'scenario', 'simulation', 'AP_CCS_Potential', 'AP_BH2S_Potential', 'AP_AEC_Potential',
-                 'AP_CCS_CE', 'AP_BH2S_CE', 'AP_AEC_CE', 'AP_CCS_CE_social', 'AP_BH2S_CE_social', 'AP_AEC_CE_social'])
+                 'AP_CCS_CE', 'AP_BH2S_CE', 'AP_AEC_CE'])
 
     OPEX_and_CAPEX = pd.DataFrame(
         columns=['time', 'scenario', 'simulation', 'AP_SMR_CAPEX', 'AP_CCS_CAPEX', 'AP_BH2S_CAPEX', 'AP_AEC_CAPEX',
@@ -160,6 +101,9 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
 
     print("Current time:", get_current_est_time())
 
+    """
+    The actual monte carlo function begins here. 
+    """
     for start in starts:
         if start == 0:
             time = 2023
@@ -171,16 +115,13 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
         for scenario in scenarios:
             for sim in range(simulations):
 
-                inter = int(sim)
-                seed(inter)
-
-                INPUT_PARAMETERS_PATH = baseline_model_inputs
+                INPUT_PARAMETERS_PATH = deterministic_model_inputs
                 with open(INPUT_PARAMETERS_PATH, 'r') as json_file:
                     INPUT_PARAMETERS = json.load(json_file)
                 INPUT_PARAMETERS_copy = INPUT_PARAMETERS.copy()
                 #Instantiate inputs from JSON file
-                instantiated_input = InstantiateInputs(inter)
-                INSTANTIATED_MODEL_INPUTS = instantiated_input.randomness_from_JSON_inputs(INPUT_PARAMETERS_copy)
+                instantiated_input = InstantiateInputs(0)
+                INSTANTIATED_MODEL_INPUTS = instantiated_input.average_values_from_JSON_inputs(INPUT_PARAMETERS_copy)
 
                 # print(inter,  INSTANTIATED_MODEL_INPUTS)
                 CAPEX_inputs = INSTANTIATED_MODEL_INPUTS['CAPEX_inputs']
@@ -205,14 +146,14 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                         CAPEX_inputs['wind_capacity'][tech] = wind_and_battery_data[time][matching][tech]['wind_capacity']
                         CAPEX_inputs['battery_capacity'][tech] = wind_and_battery_data[time][matching][tech]['wind_capacity']
                     else:
-                        CAPEX_inputs['wind_capacity'][tech] = uni(
+                        CAPEX_inputs['wind_capacity'][tech] = np.mean([
                             wind_and_battery_data[time][matching][tech +" low"]['wind_capacity'],
                             wind_and_battery_data[time][matching][tech + " high"]['wind_capacity']
-                        )
-                        CAPEX_inputs['battery_capacity'][tech] = uni(
+                        ])
+                        CAPEX_inputs['battery_capacity'][tech] = np.mean([
                             wind_and_battery_data[time][matching][tech + " low"]['battery_capacity'],
                             wind_and_battery_data[time][matching][tech + " high"]['battery_capacity']
-                        )
+                        ])
 
                 def back_calculate_depreciable_capital_factor(capex_inputs, excluded_factors):
                     keys = list(capex_inputs.keys())[1:12]
@@ -234,7 +175,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                 engineering_inputs['AP AEC H2_req'] = engineering_inputs['H2'] * engineering_inputs['H2 LHV'] / \
                                                       engineering_inputs['Eff_electrolysis'] / 24
 
-                AP_AEC_curtailment_correlative_prob = uni(0,1)
+                AP_AEC_curtailment_correlative_prob = 0.5
 
                 AP_AEC_curtailment_list = [low + AP_AEC_curtailment_correlative_prob*(high-low) for low,high in zip(wind_and_battery_data[time][matching]['AP AEC low']['curtailment'],
                                 wind_and_battery_data[time][matching]['AP AEC high']['curtailment'])]
@@ -260,9 +201,9 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                         }
 
                 biomass_requirement = (engineering_inputs['H2']*1000/70.4) * (365 * financial_inputs['availability'])   # tonnes/year
-                biomass_price = uni(50.68, 118.25)  # $/ton
+                biomass_price = np.mean([50.68, 118.25])  # $/ton [50.68, 118.25]
 
-                market_correlator = uni(0,1)
+                market_correlator = 0.5
                 def _corr(val1,val2,correlator=market_correlator):
                     return val1+(val2-val1)*correlator
 
@@ -285,11 +226,11 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                 AP_SMR_lower_bound = 0.243*carbon_intensity['NGCC thermal efficiency']*13.4/0.28 # (Kg CO2/kWh_e)*(kWh_e/kWh_t_NG)*(kWh_t_NG/Kg NG)/(Kg H2/Kg NG) = Kg CO2/Kg H2
                 AP_SMR_upper_bound = 0.527*carbon_intensity['NGCC thermal efficiency']*13.4/0.28 # (Kg CO2/kWh_e)*(kWh_e/kWh_t_NG)*(kWh_t_NG/Kg NG)/(Kg H2/Kg NG) = Kg CO2/Kg H2
 
-                carbon_intensity['stack']['AP SMR'] = uni(AP_SMR_lower_bound, AP_SMR_upper_bound)
+                carbon_intensity['stack']['AP SMR'] = np.mean([AP_SMR_lower_bound, AP_SMR_upper_bound])
                 capture_rate_CCS = 0.956
                 carbon_intensity['stack']['AP CCS'] = carbon_intensity['stack']['AP SMR']*(1-capture_rate_CCS)
 
-                carbon_intensity['natural gas'] = (uni(0.01, 7.9) / 1000) * carbon_intensity['NGCC thermal efficiency']   # ((g CO2 / kWh_e) / (1000 g CO2 / kg CO2)) * (kWh_e/kWh_t)
+                carbon_intensity['natural gas'] = (np.mean([0.01, 7.9]) / 1000) * carbon_intensity['NGCC thermal efficiency']   # ((g CO2 / kWh_e) / (1000 g CO2 / kg CO2)) * (kWh_e/kWh_t)
 
                 Policy45V_sensitivity_parameter = 1 if start == 0 else 1 #no units
 
@@ -397,6 +338,14 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                             'MI_OPEX': total_labor_costs + total_fixed_charges + misc_costs + utilities,
                             'MI_OPEX_start': start_costs}
 
+                """
+                Above this point are the calculations of inputs and quantities needed for the Stochastic DCF class
+                to be able to run simulations. 
+                
+                Below this point, the metrics are calculated based on the boolean value set in the run_simulation call. 
+                """
+
+
                 if NPV:
                     NPV_metrics = (time, scenario, sim,
                                    Stochastic_DCF('AP SMR', start, L, sim, True, scenario, financial_inputs,
@@ -404,25 +353,25 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                    Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                    Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                    Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV())
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV())
                     NPV_data.loc[len(NPV_data)] = NPV_metrics
                     # print(Stochastic_DCF('AP CCS', start, L, sim, True, scenario,financial_inputs, final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs, IRA_credits, carbon_intensity, natural_gas_requirements, final_MI_OPEX, electricity_requirements, MI_OPEX_inputs, electrode_cost, biomass_requirement, aeo22_data, aeo23_data, battery_and_turbine_data_final).TCvalue,
                     #       Stochastic_DCF('AP CCS', start, L, sim, True, scenario,financial_inputs, final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs, IRA_credits, carbon_intensity, natural_gas_requirements, final_MI_OPEX, electricity_requirements, MI_OPEX_inputs, electrode_cost, biomass_requirement, aeo22_data, aeo23_data, battery_and_turbine_data_final).inflation_rate)
@@ -439,25 +388,25 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                      IRA_credits, carbon_intensity, natural_gas_requirements,
                                                      final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                      electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                       Stochastic_DCF('AP CCS', start, L, sim, False, scenario, financial_inputs,
                                                      final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                      IRA_credits, carbon_intensity, natural_gas_requirements,
                                                      final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                      electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                       Stochastic_DCF('AP BH2S', start, L, sim, False, scenario, financial_inputs,
                                                      final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                      IRA_credits, carbon_intensity, natural_gas_requirements,
                                                      final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                      electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(),
+                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(),
                                       Stochastic_DCF('AP AEC', start, L, sim, False, scenario, financial_inputs,
                                                      final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                      IRA_credits, carbon_intensity, natural_gas_requirements,
                                                      final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                      electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV())
+                                                     battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV())
                     NP_NPV_data.loc[len(NP_NPV_data)] = NP_NPV_metrics
 
                     message = 'Calculating NP NPV...' + str(time) + ' ' + str(scenario) + ' ' + str(sim)
@@ -471,19 +420,25 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).CAC_updated(),
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                       value=1,
+                                       set_value=True),
                                    Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).CAC_updated(),
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                       value=1,
+                                       set_value=True),
                                    Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).CAC_updated()]
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                       value=1,
+                                       set_value=True)]
 
                     CAC_data.loc[len(CAC_data)] = CAC_metrics
 
@@ -500,67 +455,55 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_support(),
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(value=1,
+                                                                                             set_value=True,
+                                                                                             absolute=True) / 1000000000,
                                          Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                         final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                         IRA_credits, carbon_intensity, natural_gas_requirements,
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_support(),
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(value=1,
+                                                                                             set_value=True,
+                                                                                             absolute=True) / 1000000000,
                                          Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                         final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                         IRA_credits, carbon_intensity, natural_gas_requirements,
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_support(),
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(value=1,
+                                                                                             set_value=True,
+                                                                                             absolute=True) / 1000000000,
                                          Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
                                                         final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                         IRA_credits, carbon_intensity, natural_gas_requirements,
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support(),
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                             value=IRA_credits['TCvalue'], absolute=True) / 1000000000,
                                          Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                         final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                         IRA_credits, carbon_intensity, natural_gas_requirements,
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support(),
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                             value=IRA_credits['TCvalue'], absolute=True) / 1000000000,
                                          Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                         final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                         IRA_credits, carbon_intensity, natural_gas_requirements,
                                                         final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                         electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                         battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support(),
-                                         Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
-                                                        final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
-                                                        IRA_credits, carbon_intensity, natural_gas_requirements,
-                                                        final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
-                                                        electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                        battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support_social(),
-                                         Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
-                                                        final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
-                                                        IRA_credits, carbon_intensity, natural_gas_requirements,
-                                                        final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
-                                                        electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                        battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support_social(),
-                                         Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
-                                                        final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
-                                                        IRA_credits, carbon_intensity, natural_gas_requirements,
-                                                        final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
-                                                        electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                        battery_and_turbine_data_final,
-                                                        isCBAM=isCBAM, matching=matching).total_CE_support_social()]
-
+                                                        isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(
+                                             value=IRA_credits['TCvalue'], absolute=True) / 1000000000]
 
                     Potential_and_AP_CE_TC.loc[len(Potential_and_AP_CE_TC)] = Potential_metrics
 
+                    # print(Potential_metrics)
                     message = 'Calculating Potential TC...' + str(time) + ' ' + str(scenario) + ' ' + str(sim)
                     sys.stdout.write('\r' + message)
                     sys.stdout.flush()
@@ -624,7 +567,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                    IRA_credits, carbon_intensity, natural_gas_requirements,
                                                    final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                    electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_OPEX(T) / (
+                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_OPEX(T) / (
                                             engineering_inputs['NH3'] * 365 / 12 * financial_inputs[
                                         'availability']),
                         Point_CCS = Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
@@ -632,7 +575,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                    IRA_credits, carbon_intensity, natural_gas_requirements,
                                                    final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                    electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_OPEX(T) / (
+                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_OPEX(T) / (
                                             engineering_inputs['NH3'] * 365 / 12 * financial_inputs[
                                         'availability']),
                         Point_BH2S = Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
@@ -640,7 +583,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                     IRA_credits, carbon_intensity, natural_gas_requirements,
                                                     final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                     electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                    battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_OPEX(T) / (
+                                                    battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_OPEX(T) / (
                                              engineering_inputs['NH3'] * 365 / 12 * financial_inputs[
                                          'availability']),
                         Point_AEC = Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
@@ -648,7 +591,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                    IRA_credits, carbon_intensity, natural_gas_requirements,
                                                    final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                    electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_OPEX(T) / (
+                                                   battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_OPEX(T) / (
                                             engineering_inputs['NH3'] * 365 / 12 * financial_inputs['availability'])
                         OPEX_SMR.append(Point_SMR)
                         OPEX_CCS.append(Point_CCS)
@@ -677,28 +620,39 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                             carbon_intensity, natural_gas_requirements, final_MI_OPEX,
                                             electricity_requirements, MI_OPEX_inputs, electrode_cost,
                                             biomass_requirement, aeo22_data, aeo23_data,
-                                            battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).separate_total_support()
+                                            battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(1,
+                                                                                                                 set_value=True,
+                                                                                                                 separate=True,
+                                                                                                                 absolute=True)
                     AP_BH2S = Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs, final_CAPEX,
                                              CAPEX_inputs, engineering_inputs, Market_inputs, IRA_credits,
                                              carbon_intensity, natural_gas_requirements, final_MI_OPEX,
                                              electricity_requirements, MI_OPEX_inputs, electrode_cost,
                                              biomass_requirement, aeo22_data, aeo23_data,
-                                             battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).separate_total_support()
+                                             battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(1,
+                                                                                                                  set_value=True,
+                                                                                                                  separate=True,
+                                                                                                                  absolute=True)
                     AP_AEC = Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs, final_CAPEX,
                                             CAPEX_inputs, engineering_inputs, Market_inputs, IRA_credits,
                                             carbon_intensity, natural_gas_requirements, final_MI_OPEX,
                                             electricity_requirements, MI_OPEX_inputs, electrode_cost,
                                             biomass_requirement, aeo22_data, aeo23_data,
-                                            battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).separate_total_support()
+                                            battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).carbon_abatement_cost(1,
+                                                                                                                 set_value=True,
+                                                                                                                 separate=True,
+                                                                                                                 absolute=True)
 
                     absolute_support_metric = [time, scenario, sim,
-                                               AP_CCS['45V'], AP_BH2S['45V'], AP_AEC['45V'],
-                                               AP_CCS['45Q'], AP_BH2S['45Q'], AP_AEC['45Q'],
-                                               AP_CCS['45Y'], AP_BH2S['45Y'], AP_AEC['45Y'],
-                                               AP_CCS['45Y'], AP_BH2S['45Y'], AP_AEC['45Y'], #This is a placeholder for 48C. Ignore.
-                                               AP_CCS['48E'], AP_BH2S['48E'], AP_AEC['48E']]
+                                               AP_CCS[0] / 1000000000, AP_BH2S[0] / 1000000000, AP_AEC[0] / 1000000000,
+                                               AP_CCS[1] / 1000000000, AP_BH2S[1] / 1000000000, AP_AEC[1] / 1000000000,
+                                               AP_CCS[2] / 1000000000, AP_BH2S[2] / 1000000000, AP_AEC[2] / 1000000000,
+                                               AP_CCS[3] / 1000000000, AP_BH2S[3] / 1000000000, AP_AEC[3] / 1000000000,
+                                               AP_CCS[4] / 1000000000, AP_BH2S[4] / 1000000000, AP_AEC[4] / 1000000000]
 
                     absolute_support_data.loc[len(absolute_support_data)] = absolute_support_metric
+
+                    # print(absolute_support_metric)
 
                     message = 'Calculating absolute support...' + str(time) + ' ' + str(scenario) + ' ' + str(sim)
                     sys.stdout.write('\r' + message)
@@ -716,28 +670,28 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(
                                        ROI=True),
                                    Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(
                                        ROI=True),
                                    Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(
                                        ROI=True),
                                    Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                   final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).calculate_NPV(
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).calculate_NPV(
                                        ROI=True))
                     ROI_data.loc[len(ROI_data)] = ROI_metrics
 
@@ -755,7 +709,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                 carbon_intensity, natural_gas_requirements, final_MI_OPEX,
                                                 electricity_requirements, MI_OPEX_inputs, electrode_cost,
                                                 biomass_requirement, aeo22_data, aeo23_data,
-                                                battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).El_market]
+                                                battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).El_market]
 
                     # print(scenario, El_metric[3])
 
@@ -779,7 +733,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                     sys.stdout.write('\r' + message)
                     sys.stdout.flush()
 
-                if Sensitivity:
+                if Sensitivity and scenario == 'C':
                     A_elec_cost = np.mean(brownian_motion(drift=Market_inputs['El_drift'][1],
                                              std_dev=Market_inputs['El_STD'],
                                              n_steps=601,
@@ -798,9 +752,9 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
 
                     NH3_average, NG_average = brownian_motion(drift=Market_inputs['NG_drift'],
                                                           std_dev=Market_inputs['NG_std'],
-                                                          correlation=0.8,
+                                                          correlation=1,
                                                           n_steps=601,
-                                                          seed=sim).correlated_GBM([Market_inputs['NH3_initial_price'], Market_inputs['NG_initial_price']])
+                                                          seed=0).correlated_GBM([Market_inputs['NH3_initial_price'], Market_inputs['NG_initial_price']])
 
                     NH3_average, NG_average = np.mean(NH3_average), np.mean(NG_average)
 
@@ -879,14 +833,18 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                     stackCAPEX = CAPEX_inputs[f'Stack cost {time}']
 
                     for tech in technologies:
-                        metric_Sense = [time, scenario, sim, CAPEX_sensitivity[tech], electricityCost, MI_OPEX_sensitivity[tech], Feedstock_price[tech], NH3_average,
-                                  CI_sens[tech], Battery_var_OPEX, Battery_OPEX, Battery_CAPEX, Wind_CAPEX,
-                                  Credits_48C, IRA_Market_value, PPA_pricing, Curtailment,
-                                  stackCAPEX if tech == 'AP AEC' else 0,
-                                  engineering_inputs['Eff_electrolysis'] if tech == 'AP AEC' else 0,
-                                  IRA_credits['EU_CO2_price'] if isCBAM else 0]
+                        if tech == 'AP AEC':
+                            metric_Sense = [time, scenario, sim, CAPEX_sensitivity[tech], electricityCost, MI_OPEX_sensitivity[tech], Feedstock_price[tech], NH3_average,
+                                      CI_sens[tech], Battery_var_OPEX, Battery_OPEX, Battery_CAPEX, Wind_CAPEX,
+                                      Credits_48C, IRA_Market_value, PPA_pricing, Curtailment,
+                                      stackCAPEX if tech == 'AP AEC' else 0,
+                                      engineering_inputs['Eff_electrolysis'] if tech == 'AP AEC' else 0,
+                                      IRA_credits['EU_CO2_price'] if isCBAM else 0]
 
-                        sensitivity_data[tech].loc[len(sensitivity_data[tech])] = metric_Sense
+                            sensitivity_data[tech].loc[len(sensitivity_data[tech])] = metric_Sense
+
+                            # print(metric_Sense)
+
 
 
                     message = 'Calculating sensitivity...' + str(time) + ' ' + str(scenario) + ' ' + str(sim)
@@ -899,28 +857,28 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                   IRA_credits, carbon_intensity, natural_gas_requirements,
                                                   final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                   electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
-                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching).quality_assure()
+                                                  battery_and_turbine_data_final, isCBAM=isCBAM, matching=matching, deterministic=True).quality_assure()
                     AP_CCS_CFs = Stochastic_DCF('AP CCS', start, L, sim, True, scenario, financial_inputs,
                                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                 IRA_credits, carbon_intensity, natural_gas_requirements,
                                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                 battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                matching=matching).quality_assure()
+                                                matching=matching, deterministic=True).quality_assure()
                     AP_BH2S_CFs = Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                 IRA_credits, carbon_intensity, natural_gas_requirements,
                                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                 battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                matching=matching).quality_assure()
+                                                matching=matching, deterministic=True).quality_assure()
                     AP_AEC_CFs = Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
                                                 IRA_credits, carbon_intensity, natural_gas_requirements,
                                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                 battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                matching=matching).quality_assure()
+                                                matching=matching, deterministic=True).quality_assure()
                     dfs = {
                         'AP SMR': AP_SMR_CFs,
                         'AP CCS': AP_CCS_CFs,
@@ -938,7 +896,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                 battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                matching=matching).quality_assure_CAC()
+                                                matching=matching, deterministic=True).quality_assure_CAC()
 
                     AP_BH2S_CFs = Stochastic_DCF('AP BH2S', start, L, sim, True, scenario, financial_inputs,
                                                  final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
@@ -946,7 +904,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                  final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                  electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                  battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                 matching=matching).quality_assure_CAC()
+                                                 matching=matching, deterministic=True).quality_assure_CAC()
 
                     AP_AEC_CFs = Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
                                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
@@ -954,8 +912,41 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
                                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
                                                 battery_and_turbine_data_final, isCBAM=isCBAM,
-                                                matching=matching).quality_assure_CAC()
+                                                matching=matching, deterministic=True).quality_assure_CAC()
 
+                if scenario == 'C':
+                    pass
+                    # print( 'CAC' ,Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
+                    #                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
+                    #                                 IRA_credits, carbon_intensity, natural_gas_requirements,
+                    #                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
+                    #                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
+                    #                                 battery_and_turbine_data_final, isCBAM=isCBAM,
+                    #                                 matching=matching, deterministic=True).CAC_updated())
+
+                    # print('\n','Total support', Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
+                    #                                          final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
+                    #                                          IRA_credits, carbon_intensity, natural_gas_requirements,
+                    #                                          final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
+                    #                                          electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
+                    #                                          battery_and_turbine_data_final, isCBAM=isCBAM,
+                    #                                          matching=matching, deterministic=True).total_support())
+                    #
+                    # print('Total CE support', Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
+                    #                      final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
+                    #                      IRA_credits, carbon_intensity, natural_gas_requirements,
+                    #                      final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
+                    #                      electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
+                    #                      battery_and_turbine_data_final, isCBAM=isCBAM,
+                    #                      matching=matching, deterministic=True).total_CE_support())
+
+                    # print('Total support separated', Stochastic_DCF('AP AEC', start, L, sim, True, scenario, financial_inputs,
+                    #                                 final_CAPEX, CAPEX_inputs, engineering_inputs, Market_inputs,
+                    #                                 IRA_credits, carbon_intensity, natural_gas_requirements,
+                    #                                 final_MI_OPEX, electricity_requirements, MI_OPEX_inputs,
+                    #                                 electrode_cost, biomass_requirement, aeo22_data, aeo23_data,
+                    #                                 battery_and_turbine_data_final, isCBAM=isCBAM,
+                    #                                 matching=matching, deterministic=True).separate_total_support())
 
 
 
@@ -991,26 +982,27 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
 
 # run_simulation(1, quality_assurance=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
 #
-CAPEX_component_dataset = run_simulation(500*mult, CAPEX_component=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(CAPEX_component_dataset.describe())
-NPV_dataset = run_simulation(500*mult, NPV=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(NPV_dataset.describe())
-NP_NPV_dataset = run_simulation(500*mult, NP_NPV=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(NP_NPV_dataset.describe())
-CAC_dataset = run_simulation(500*mult, CAC=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(CAC_dataset.describe())
-CI_dataset = run_simulation(500*mult, CI=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-# #
-TC_dataset = run_simulation(500*mult, Potential_TC=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(TC_dataset.describe())
-# CAPEX_OPEX_dataset = run_simulation(500*mult, CAPEX_OPEX=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# CAPEX_component_dataset = run_simulation(500*mult, CAPEX_component=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(CAPEX_component_dataset.describe())
+NPV_dataset = run_simulation(1*mult, NPV=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+print(NPV_dataset)
+# print(NPV_dataset.describe())
+# NP_NPV_dataset = run_simulation(500*mult, NP_NPV=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(NP_NPV_dataset.describe())
+# CAC_dataset = run_simulation(500*mult, CAC=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(CAC_dataset.describe())
+# CI_dataset = run_simulation(50*mult, CI=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+#
+# TC_dataset = run_simulation(1*mult, Potential_TC=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(TC_dataset.describe())
+# CAPEX_OPEX_dataset = run_simulation(50*mult, CAPEX_OPEX=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
 # print(CAPEX_OPEX_dataset.describe())
-absolute_support_dataset = run_simulation(500*mult, absolute_support=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(absolute_support_dataset.describe())
-# ROI_dataset = run_simulation(500*mult, ROI=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# absolute_support_dataset = run_simulation(1*mult, absolute_support=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(absolute_support_dataset.describe())
+# ROI_dataset = run_simulation(250*mult, ROI=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
 # print(ROI_dataset.describe())
-El_dataset = run_simulation(500*mult, El_market=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
-print(El_dataset.describe())
+# El_dataset = run_simulation(50*mult, El_market=True, isCBAM=CBAM, matching=matching)  # checked all scenarios v5
+# print(El_dataset.describe())
 # sensitivity_dataset = run_simulation(500*mult, Sensitivity=True, isCBAM=CBAM, matching=matching)
 # print(sensitivity_dataset.describe())
 
@@ -1022,24 +1014,24 @@ print(El_dataset.describe())
 
 
 dfs = {
-    'NPV': NPV_dataset,
-    'NP_NPV': NP_NPV_dataset,
-    'CAC': CAC_dataset,
-    'CI': CI_dataset,
-    'TC': TC_dataset,
+    # 'NPV': NPV_dataset,
+    # 'NP_NPV': NP_NPV_dataset,
+    # 'CAC': CAC_dataset,
+    # 'CI': CI_dataset,
+    # 'TC': TC_dataset,
     # 'CAPEX_OPEX': CAPEX_OPEX_dataset,
-    'absolute_support': absolute_support_dataset,
+    # 'absolute_support': absolute_support_dataset,
     # 'ROI': ROI_dataset,
-    'El': El_dataset,
+    # 'El': El_dataset,
     # 'CAPEX_component': CAPEX_component_dataset,
-    # # 'sensitivity': sensitivity_dataset
+    # 'sensitivity': sensitivity_dataset
 }
 
 # df_sens = sensitivity_dataset
 
-dataframes_to_excel(dfs, f"TC_FINAL_alldata_v12{'_CBAM' if CBAM else ''}_{matching}.xlsx")
+# dataframes_to_excel(dfs, f"alldata_v10{'_CBAM' if CBAM else ''}_{matching}.xlsx")
 # dataframes_to_excel(dfs, "calibrate_electricity.xlsx")
-# dataframes_to_excel(df_sens, f"FINAL_sensitivities{'_CBAM' if CBAM else ''}_{matching}.xlsx")
+# dataframes_to_excel(df_sens, f"sensitivities{'_CBAM' if CBAM else ''}_{matching}.xlsx")
 # dataframes_to_excel(dfs, "test.xlsx")
 # dataframes_to_excel(dfs, "test.xlsx")
 

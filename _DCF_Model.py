@@ -2,7 +2,7 @@
 from _TAX_CREDITS import TaxCreditCalculator
 from _CI_Calculator import Carbon_Intensity_of_technology
 import pandas as pd
-from BASELINE_global_variables import *
+from global_variables import *
 from _GBM import brownian_motion
 
 def dataframes_to_excel(dfs, file_name):
