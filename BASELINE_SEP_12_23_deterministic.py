@@ -54,23 +54,16 @@ def get_current_est_time():
     current_time_est = datetime.now(est_timezone)
 
     return current_time_est.strftime('%Y-%m-%d %H:%M:%S')
-#TODO Check the replacement cost logic
-#TODO Check and automate the final_CAPEX and final_OPEX
-#TODO Update the Land cost to be 900,000 for AP and 4% installed cost for wind and battery
-#TODO Eliminate battery roundtrip efficiency because it is already taken into account in the optimization model
-#TODO Check the policy choice helper function works correctly
-#TODO Check the depreceation is implemented correctly
-#TODO Fix BFW water costs. Assume HP steam costs are 0 since the HP steam is generated on site.
 
 #Load the AEO22 and AEO23 data from the Excel file
 aeo22_data = pd.read_excel(
-    r"AEO22_AEO23_energy_mix_fraction.xlsx", sheet_name='AEO22',
+    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO22',
     index_col=0)
 aeo23_data = pd.read_excel(
-    r"AEO22_AEO23_energy_mix_fraction.xlsx", sheet_name='AEO23',
+    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO23',
     index_col=0)
 wind_and_battery_excel = pd.read_excel(
-    r"C:\Users\Work\PycharmProjects\pythonProject1\Wind data/optimization_results.xlsx", sheet_name='Sheet1')
+    optimization_results_file_path, sheet_name='Sheet1')
 
 PPA_data = LCOE_dataset
 
@@ -103,9 +96,6 @@ def extract_values(time, matching, results_df=wind_and_battery_excel):
 wind_and_battery_data = {time:{matching:extract_values(time, matching) for matching in matching_type} for time in times}
 
 #Import average inputs from JSON file
-
-
-
 
 def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=False, NP_NPV=False, CAPEX_OPEX=False,
                    absolute_support=False, ROI=False, El_market=False, CAPEX_component=False, Sensitivity=False, isCBAM=False,
@@ -171,7 +161,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
         for scenario in scenarios:
             for sim in range(simulations):
 
-                INPUT_PARAMETERS_PATH = r"C:\Users\Work\PycharmProjects\pythonProject1\APPLICATION\input_parameters_deterministic.json"
+                INPUT_PARAMETERS_PATH = deterministic_model_inputs
                 with open(INPUT_PARAMETERS_PATH, 'r') as json_file:
                     INPUT_PARAMETERS = json.load(json_file)
                 INPUT_PARAMETERS_copy = INPUT_PARAMETERS.copy()

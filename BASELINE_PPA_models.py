@@ -5,9 +5,9 @@ import json
 from BASELINE_global_variables import *
 from _instantiate_inputs import InstantiateInputs
 
-#Obtain optimization results
-OPTIMIZATION_RESULTS_FILE_PATH = r"C:\Users\Work\PycharmProjects\pythonProject1\Wind data\optimization_results.xlsx"
+OPTIMIZATION_RESULTS_FILE_PATH = optimization_results_file_path
 wind_and_battery_excel = pd.read_excel(OPTIMIZATION_RESULTS_FILE_PATH, sheet_name='Sheet1')
+#Obtain optimization results
 
 CAPEX_range = ['high','low']
 def extract_values(time, matching, results_df= wind_and_battery_excel):
@@ -47,7 +47,7 @@ scenarios = ['C', 'D']
 technology = 'AP AEC high'
 
 #Import average inputs from JSON file
-INPUT_PARAMETERS_PATH = r"C:\Users\Work\PycharmProjects\pythonProject1\APPLICATION\input_parameters.json"
+INPUT_PARAMETERS_PATH = baseline_model_inputs
 with open(INPUT_PARAMETERS_PATH, 'r') as json_file:
     INPUT_PARAMETERS = json.load(json_file)
 PPA_INPUTS = InstantiateInputs(0).average_values_from_JSON_inputs(INPUT_PARAMETERS)

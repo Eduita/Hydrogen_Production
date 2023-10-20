@@ -64,13 +64,13 @@ def get_current_est_time():
 
 #Load the AEO22 and AEO23 data from the Excel file
 aeo22_data = pd.read_excel(
-    r"AEO22_AEO23_energy_mix_fraction.xlsx", sheet_name='AEO22',
+    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO22',
     index_col=0)
 aeo23_data = pd.read_excel(
-    r"AEO22_AEO23_energy_mix_fraction.xlsx", sheet_name='AEO23',
+    electric_grid_carbon_intensity_data_file_path, sheet_name='AEO23',
     index_col=0)
-wind_and_battery_excel = pd.read_excel(
-    r"C:\Users\Work\PycharmProjects\pythonProject1\Wind data/optimization_results.xlsx", sheet_name='Sheet1')
+wind_and_battery_excel = pd.read_excel(optimization_results_file_path, sheet_name='Sheet1')
+
 
 PPA_data = LCOE_dataset
 
@@ -174,7 +174,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                 inter = int(sim)
                 seed(inter)
 
-                INPUT_PARAMETERS_PATH = r"C:\Users\Work\PycharmProjects\pythonProject1\APPLICATION\input_parameters.json"
+                INPUT_PARAMETERS_PATH = baseline_model_inputs
                 with open(INPUT_PARAMETERS_PATH, 'r') as json_file:
                     INPUT_PARAMETERS = json.load(json_file)
                 INPUT_PARAMETERS_copy = INPUT_PARAMETERS.copy()
