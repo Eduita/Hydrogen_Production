@@ -50,8 +50,6 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
     Below is a set of empty dataframes corresponding to the metrics of interest. These dataframes label the dataframe columns
     so that plotting becomes easier. 
     """
-
-
     NPV_data = pd.DataFrame(
         columns=['time', 'scenario', 'simulation', 'AP_SMR_NPV', 'AP_CCS_NPV', 'AP_BH2S_NPV', 'AP_AEC_NPV'])
     NP_NPV_data = pd.DataFrame(
