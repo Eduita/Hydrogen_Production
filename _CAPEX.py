@@ -1,4 +1,3 @@
-
 class CAPEX:
     def __init__(self, inputs):
 
