@@ -240,10 +240,7 @@ class Stochastic_DCF:
             Sales_T = 0
         return Sales_T
 
-    def calculate_OPEX(self, T):
-        if not (self.start + 36 < T <= self.start + self.construction + self.L):
-            return 0
-
+    def _CO2_transport_and_storage_cost(self, T):
         T_S_cost = 0
         if self.technology == 'AP CCS':
             baseline_emissions = Carbon_Intensity_of_technology('AP SMR', self.carbon_intensity, self.scenario,
@@ -256,44 +253,66 @@ class Stochastic_DCF:
                        self.engineering_inputs['H2'] * 365 / 12 * self.financial_inputs['availability'] * \
                        self.MI_OPEX_inputs['CCS T&S Cost']
 
+        return T_S_cost
 
-        # CBAM CO2 Cost --
+    def _CBAM_certificate_cost(self,T):
         CO2_tax = 0
         if self.isCBAM:
             EU_CI_baseline = self.carbon_intensity['EU 2023 emissions base'] * (
-                        1 - self.carbon_intensity['EU_emissions_reduction']) ** (T/12)
+                    1 - self.carbon_intensity['EU_emissions_reduction']) ** (T / 12)
 
             CO2_tax = (EU_CI_baseline - self.Emissions_of_technology.total_emissions(T)) * \
                       self.engineering_inputs['H2'] * 365 / 12 * self.financial_inputs['availability'] * \
                       self.IRA_credits['EU_CO2_price']
+        return CO2_tax
 
+    def calculate_OPEX(self, T):
+        if not (self.start + 36 < T <= self.start + self.construction + self.L):
+            return 0
 
-        MI_OPEX_temp = -(self.final_MI_OPEX[self.technology]['MI_OPEX'] + T_S_cost*12 - 12*CO2_tax)
+        T_S_cost = self._CO2_transport_and_storage_cost(T) #$/month
+        CO2_tax = self._CBAM_certificate_cost(T) #$/month
+
+        MI_OPEX_temp = -(self.final_MI_OPEX[self.technology]['MI_OPEX'] + 12*(T_S_cost - CO2_tax)) #$/year
+
+        #Start-up costs
         if T == self.start + self.construction + 1:
             MI_OPEX_temp += -self.final_MI_OPEX[self.technology]['MI_OPEX_start']
 
+        #Calculate NG costs. No logic required since technologies that have a 0 NG flowrate have 0 NG cost.
         NG_cost = (self.natural_gas_requirements[self.technology] * self.NG_market[T]) / 12
+
+        #Electricity cost calculation. Logic required since electricity costs vary across business models.
         elec_cost = 0
+
+        #If A | B -> grid electricity
         if self.scenario == 'A' or self.scenario == 'B':
             elec_cost = (self.electricity_requirements[self.technology][1] * 1000 * self.H_operating / 12) * self.El_market[T]
+
+        #If PPA, use the LCOE calculated from the PPA module.
         elif self.scenario == 'D':
             elec_cost = (self.electricity_requirements[self.technology][1] * self.El_PPA_market * 1000 * self.H_operating / 12)
 
+        #If build-and-own scenario, calculate the OPEX related to the wind and battery farm.
         elif self.scenario == 'C' and self.technology != 'AP SMR':
-            #Battery discharge costs
+            #Battery discharge costs. Fixed costs of the wind farm are taken care of in the run_simulation function.
             index = T % len(self.electricity_requirements['discharge'][self.technology])
             variable_battery_discharge = \
                 self.electricity_requirements['discharge'][self.technology][index]  # MWh/month
 
             battery_VOM = self.MI_OPEX_inputs['Battery Var OPEX'] * variable_battery_discharge / 4  # $/(kW-year) * (kW) * (1 year/ 12 months)
 
-            #Electricity costs
+            #Dealing with excess electricity
             index = T % len(self.electricity_requirements['curtailment'][self.technology])
-            elec_cost = (-self.electricity_requirements['curtailment'][self.technology][index]*max(self.El_market[T], self.Market_inputs['PPA_pricing_for_C'][self.time][self.policy])
+            elec_cost = (-self.electricity_requirements['curtailment'][self.technology][index]
+                         *max(self.El_market[T], self.Market_inputs['PPA_pricing_for_C'][self.time][self.policy])
                          - battery_VOM)
-        
 
+        #Once both electricity and natural gas costs are calculated. Calculate the MI_OPEX on monthly basis
+        #Then, include NG cost and elec_cost. Notice all signs are negative.
         MD_OPEX = (MI_OPEX_temp / 12 - (NG_cost + elec_cost))
+
+        #Calculate Peters et al., 2003 final heuristics. (see SI C section on market depedent OPEX)
         distribution_and_marketing_costs = self.MI_OPEX_inputs['distribution_and_marketing']
         MD_OPEX += MD_OPEX * (distribution_and_marketing_costs + distribution_and_marketing_costs * self.MI_OPEX_inputs[
             'R&D costs'])
