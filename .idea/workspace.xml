@@ -4,7 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="97b7a679-31cb-4c99-89c7-7576eaea792b" name="Changes" comment="Changed calculate_OPEX function to be more readable. Also added comments." />
+    <list default="true" id="97b7a679-31cb-4c99-89c7-7576eaea792b" name="Changes" comment="Changed calculate_OPEX function to be more readable. Also added comments.">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/deterministic_model_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/deterministic_model_runner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input_parameters.json" beforeDir="false" afterPath="$PROJECT_DIR$/input_parameters.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/input_parameters_deterministic.json" beforeDir="false" afterPath="$PROJECT_DIR$/input_parameters_deterministic.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/optimization_model.py" beforeDir="false" afterPath="$PROJECT_DIR$/optimization_model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/probabilistic_model_runner.py" beforeDir="false" afterPath="$PROJECT_DIR$/probabilistic_model_runner.py" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -51,15 +58,15 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "base__hydrogen__production__model",
-    "last_opened_file_path": "C:/Users/Work/Desktop/AP Model",
-    "settings.editor.selected.configurable": "com.maddyhome.idea.vim.ui.VimEmulationConfigurable"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;base__hydrogen__production__model&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/Work/Desktop/AP Model&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;com.maddyhome.idea.vim.ui.VimEmulationConfigurable&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\Work\Desktop\AP Model" />
@@ -145,7 +152,15 @@
       <option name="project" value="LOCAL" />
       <updated>1697897136040</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="Changed calculate_OPEX function to be more readable. Also added comments.">
+      <option name="closed" value="true" />
+      <created>1697897210522</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1697897210522</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -157,6 +172,16 @@
               <RecentGroup>
                 <option name="FILTER_VALUES">
                   <option value="base_hydrogen_production_model" />
+                </option>
+              </RecentGroup>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="HEAD" />
+                </option>
+              </RecentGroup>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="main" />
                 </option>
               </RecentGroup>
             </list>

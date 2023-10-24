@@ -26,10 +26,10 @@
     "Battery roundtrip eff": 0.85
   },
   "basic_equipment_costs": {
-    "AP SMR": ["constant",726947344.6, 508096133.6],
-    "AP CCS": ["constant",1103130442, 781847023.7],
-    "AP BH2S": ["constant",940144529.3, 528806470],
-    "AP AEC": ["constant",567914373, 402707562.8]
+    "AP SMR": ["constant",157849897.6, 104543518],
+    "AP CCS": ["constant",553881950.5, 388892304.1],
+    "AP BH2S": ["constant",470419875.7, 195810831.7],
+    "AP AEC": ["constant",0, 0]
   },
   "financial_inputs" : {
     "availability": 0.9,
@@ -53,9 +53,9 @@
     "CCS capture rate": 0.956
   },
   "electricity_requirements": {
-    "AP SMR": ["constant", 13, 64],
-    "AP CCS": ["constant", 41, 117],
-    "AP BH2S": ["constant", 76.6, 127]
+    "AP SMR": ["constant", 13, 13],
+    "AP CCS": ["constant", 41, 41],
+    "AP BH2S": ["constant", 76.6, 76.6]
   },
   "natural_gas_requirements": {
       "AP SMR": 25039232.02,
@@ -64,10 +64,10 @@
       "AP AEC": 0
   },
   "BFW_requirements": {
-      "AP SMR": 52709532285,
-      "AP CCS": 54034044285,
-      "AP BH2S": 53448253002,
-      "AP AEC": 73077302619,
+      "AP SMR": 2507112000,
+      "AP CCS": 3831624000,
+      "AP BH2S": 2507112000,
+      "AP AEC": 0,
       "AP AEC osmosis": 1332790200
   },
   "HP_steam_requirements": {
@@ -78,10 +78,10 @@
   },
   "MI_OPEX_inputs" : {
     "processing_steps": {
-        "AP SMR": 30,
-        "AP CCS": 33,
-        "AP BH2S": 38,
-        "AP AEC": 23
+        "AP SMR": 17,
+        "AP CCS": 20,
+        "AP BH2S": 26,
+        "AP AEC": 2
     },
     "hours_perday_perprocessingstep": 55,
     "operator_pay": 39.75,
@@ -103,16 +103,16 @@
         "Administrative Costs": 0.2
     },
     "misc_raw_materials": {
-        "AP SMR": 6824075.699,
-        "AP CCS": 12434783.54,
-        "AP BH2S":  27093089.54,
+        "AP SMR": 245890.4625,
+        "AP CCS": 1008293.037,
+        "AP BH2S":  2475708.999,
         "AP AEC": 335267.1
     },
     "start-up costs": {
         "AP SMR": 15413897.74,
         "AP CCS": 16514194.14,
         "AP BH2S":  15532525.48,
-        "AP AEC": 118627.74
+        "AP AEC": 0
     },
     "BFW cost": 0.000285,
     "AEC BFW cost reverse osmosis": 0.0059,

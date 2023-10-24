@@ -183,9 +183,7 @@ def run_simulation(simulations, NPV=False, CAC=False, CI=False, Potential_TC=Fal
                                            zip(wind_and_battery_data[time][matching]['AP AEC low']['discharge'],
                                                wind_and_battery_data[time][matching]['AP AEC high']['discharge'])]
 
-                electricity_requirements['AP AEC'] = (engineering_inputs['AP AEC H2_req'],
-                               engineering_inputs['AP AEC H2_req'] + (408305790 + 3900560.592) / (
-                                       365 * 24 * financial_inputs['availability']) / 1000)  # MW
+                electricity_requirements['AP AEC'] = (engineering_inputs['AP AEC H2_req'],engineering_inputs['AP AEC H2_req'])  # MW
 
                 electricity_requirements['curtailment'] = { #MWh/month
                         'AP CCS': wind_and_battery_data[time][matching]['AP CCS']['curtailment'],

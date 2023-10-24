@@ -198,8 +198,8 @@ matchings = ['hourly', 'monthly', 'yearly']
 electricity_demand = { #MW
     'AP AEC low': [913],
     'AP AEC high': [1007],
-    'AP CCS': [127],
-    'AP BH2S': [117]
+    'AP CCS': [41],
+    'AP BH2S': [76.6]
 }
 
 F_a = 0.9
